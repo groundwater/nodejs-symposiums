@@ -1,3 +1,130 @@
+Outline
+
+1. assume we have a collection object `foo` with a `.get(key)` method
+  1. if `key` exists, return the associated value
+  2. if `key` does not exist, throw a `NoValue` error
+  3. note there is no other way to check if they key exists or not
+2. the consumer is forced to use `try/catch` e.g.
+
+  ```js
+  try {
+    var val = foo.get('mykey')
+    // val exists and was part of the collection
+  } catch(err) {
+    // programmer assumes there is no mykey/val pairning
+  }
+  ```
+3. the problem, is that `foo.get` can have programmer errors in it, e.g.
+  1. the .get api could be called incorrectly (with not a string)
+  2. the .get implementation can have a mistyped variable
+  3. the .get implementation may have a dependency that throws an error
+4. these errors can creep in because semver allows dependencies to be upgraded on `npm install`
+5. if any of the above programmer erorrs occur, `foo.get()` will throw
+6. the program calling foo incorrectly assumes the collection has no value for the key passed in,
+when in reality the program is silently failing to behave correctly.
+The limit of the misbehavior is more or less unlimited.
+
+In many of the above events, foo.get() no longer operates correctly according to its own API.
+By catching all thrown errors however, we are masking the misbehavior.
+
+Generally we want the program to terminate immediately, with as much error information available as possible,
+so we can correct the problem.
+
+One solution to the above is to switch on the type of error caugh in your catch statement.
+This works for errors we wish to handle, but can present problems if you do not wish to handle the error.
+
+e.g.
+
+```js
+try {
+  let val = foo.get()
+} catch(e) {
+  if (e instanceof NoValue) {
+    // handle no value
+  } else {
+    throw e
+  }
+}
+```
+
+The good
+1. e has captured the stack that threw the error
+Problems are
+1. it's ugly, and i bet you no body will do this
+2. We have unwound the actual stack from the error site to the error handling site.
+This prevents post-mortem analysis using core dumps and debugger tools.
+  - lose all intermediate arguments used to reach the error condition
+  - possibly lose values on the heap that were in play during the error
+
+Introduce typed error catching
+
+1. Evaluate expression before catch block is entered to determine whether the error
+   is best handled at this location.
+```js
+try {
+  let val = foo.get()
+} catch(e if <expr>) {
+  // e is the error we expect
+}
+```
+
+The good:
+ - the JS way
+The bad:
+ - Need to unwind the stack to the catch handler location to evaluate <expr>
+ - Unexpected side effects in <expr> can lead to scary program behavior
+ - what if <expr> ::= (function() { throw 'hi'; })();
+
+A non-JS idiomatic way is to evaluate all catch conditions before entering the body
+of the try.
+
+```js
+try {
+  let val = foo.get()
+} catch(e : NoValue) {
+  // e has type NoValue
+}
+```
+
+Open Questions:
+ - Is there a separate typing environment for looking up things on rhs of :
+    - This is the case for typescript
+ - Allow anything other than type literal (type name), maybe expression evaluating
+   to a type?
+
+Other (existing?) solutions:
+
+ - pattern match on the return value (return null, undefined, or Error in exceptional
+   cases assuming that these are not valid entries in collection)
+ - take a callback (function(err, result) {....})
+    - people would expect callback to invoke async even if result is sync (keep zalgo contained)
+
+In order to minimize your program operating in an unknown state:
+
+1. as part of your own APIs, do not force users to catch, throwing should always terminate the program
+2. for legacy APIs like `JSON.parse` keep the try block to a minimum e.g.
+  ```js
+  var data
+  try {
+    data = JSON.parse(...)
+  } catch (e) {
+    data = null
+    // or ignore this
+  }
+  ```
+  - perhaps node core can provide a safe wrapper for this, e.g. `util.parse`
+3. DO throw if someone is using your API incorrectly, e.g. wrong argument types.
+  Throwing should always result in a change to the code to prevent future errors from being thrown
+    ex) using a null/instanceof check before invoking API with desired arguments
+
+Promise issues:
+ - promises impose implicit try-catch, result in catching everything as described above
+ - general fuckery
+ - capable of silently swallowing arbitrary errors
+ - This may be avoided using async/await since await converts failed promises to throws
+   which would play nicely with above checked exceptions
+
+
 # Don't know what throws
 
 Problem: Which native JS APIs throw?
