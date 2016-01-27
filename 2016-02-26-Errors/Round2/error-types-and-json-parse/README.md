@@ -1,28 +1,29 @@
 # Don't know what throws
 
-- Which native JS APIs throw?
+Problem: Which native JS APIs throw?
 
 ```js
 JSON.parse(input);
 ```
 
-- Which node core APIs throw?
+Problem: Which node core APIs throw?
 
 ```js
-fs.readFileSync('foo.md') => throws
+fs.readFileSync('foo.md');
 ```
 
-# If something throws, we don't know if you can try/catch/recover
+# If something throws, we don't know if you can try/catch and recover
 
-Better core documentation?
-Which ones are recoverable, which ones are not?
+Problem: we need better core documentation. Which ones are recoverable, which
+ones are not?
 
-# If recoverable? try/catch is too blunt/broad
+Node core says: "if core throws, assume you are hosed. abort asap."
 
-Problem: Lack of conditional catch (i.e., something like checked exception),
-it's possible to catch unexpected errors in place where you only mean to catch
-expected errors. Because you don't have a compiler, try/catch in JS is catch
-throwable, which means everything under the sun is caught.
+# If throw is recoverable, try/catch is too blunt
+
+Problem: Lack of conditional catch means it's possible to catch unexpected
+errors in places where you only mean to catch expected errors. That means
+try/catch in JS is effectively equivalent to catch throwable.
 
 ```js
 try {
@@ -32,22 +33,26 @@ try {
     JSON.parse(input1);
     JSON.pirse(input2);
 } catch (e) {
-    // e instanceof SyntaxError, but what was the cause?
+    // e instanceof SyntaxError or TypeError, but what was the cause?
 }
 ```
 
-Recommendation: Reduce the scope of try/catch to only the lines of code that
-you expect to throw.
+Reduce the scope of try/catch to only the lines of code that you expect to
+throw.
 
-# Conditional catch is not a solution
+# Conditional catch won't always work
 
-Problem: Use conditional catch to catch only things you want. JS is dynamic,
-no way to guarantee your condition is valid until the time you evaluate it.
+Problem: Even if conditional catch based on error types is supported at a
+language level, JS is dynamic, no way to guarantee your condition is valid
+until the time you evaluate it.
+
 
 ```js
 try {
     x();
     // but inside x(), we set global.Error = {};
+    // even if global.Error was not mutated, this error object can come from
+    // a different context, in which case this condition will also fail.
 } catch if (e instanceof Error) {
     // evaluation of this condition happens only when this catch block
     // is invoked. there is no guarantee that this will do what you expect it
@@ -84,11 +89,31 @@ try {
 
 So many bad things.
 
-# Problems with throw
+# Between errbacks, throw/try/catch, event emitter, it's possible to swallow errors
+
+You can ignore/swallow error objects in errbacks.
+You can forget to subscribe to `.on('error', function() { ... })` event.
+You can forget to not rethrow.
+
+# Differentiating types of errors
+
+Programmer/Unexpected Errors:
+  - TypeError
+  - RangeError
+  - SyntaxError
+
+Operational/Expected Errors:
+  - Timeouts
+  - JSON.parse()
+  - ECONNREFUSED
+  - ENOENT
+  - ENOMEM
+  - etc.
+
+All programmer errors are automatically thrown, and operational errors are
+returned via errbacks. Not handling an operational error makes it a programmer
+error, however it is not automatically surfaced.
+
+JSON.parse is bad because it crosses both of these boxes.
 
 
-
-
-
-
-# Error responses
