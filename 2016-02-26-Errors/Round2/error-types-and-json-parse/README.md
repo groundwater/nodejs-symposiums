@@ -115,6 +115,7 @@ try {
 
 The good
 1. Despite rethrowing, `err` still has the correct stack.
+
 The bad
 1. It's ugly, and i bet you no body will do this.
 2. We have unwound the actual stack from the error site to the error handling site.
@@ -152,6 +153,7 @@ try {
 The good:
  - Follows "JS way" of using expressions.
  - Allows multiple independent `catch` blocks for different error cases.
+
 The bad:
  - Need to unwind the stack to the catch handler location to evaluate `<expr>`.
  - Unexpected side effects in `<expr>` can lead to scary program behavior
@@ -171,8 +173,10 @@ try {
 The good
 - all of the above
 - The VM can decide if the exception is catchable _before_ unwinding the stack.
+
 The bad
 - No language type support yet.
+
 Open Questions:
  - Is there a separate typing environment for looking up things on rhs of :
     - This is the case for typescript
