@@ -89,7 +89,6 @@ In order to minimize your program operating in an unknown state:
 
 Promise issues:
  - promises impose implicit try-catch, result in catching everything as described above
- - general fuckery
  - capable of silently swallowing arbitrary errors
  - This may be avoided using async/await since await converts failed promises to throws
    which would play nicely if we have checked exceptions (see below)
@@ -114,9 +113,11 @@ try {
 ```
 
 The good
+
 1. Despite rethrowing, `err` still has the correct stack.
 
 The bad
+
 1. It's ugly, and i bet you no body will do this.
 2. We have unwound the actual stack from the error site to the error handling site.
 This prevents post-mortem analysis using core dumps and debugger tools.
@@ -151,10 +152,12 @@ try {
 ```
 
 The good:
+
  - Follows "JS way" of using expressions.
  - Allows multiple independent `catch` blocks for different error cases.
 
 The bad:
+
  - Need to unwind the stack to the catch handler location to evaluate `<expr>`.
  - Unexpected side effects in `<expr>` can lead to scary program behavior
  - How do we handle complex cases like `<expr> ::= (function() { throw 'hi'; })();`
@@ -171,13 +174,16 @@ try {
 ```
 
 The good
+
 - all of the above
 - The VM can decide if the exception is catchable _before_ unwinding the stack.
 
 The bad
+
 - No language type support yet.
 
 Open Questions:
+
  - Is there a separate typing environment for looking up things on rhs of :
     - This is the case for typescript
  - Allow anything other than type literal (type name), maybe expression evaluating to a type?
