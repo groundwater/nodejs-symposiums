@@ -1,10 +1,15 @@
-Outline
+# Problem Outline
 
-1. assume we have a collection object `foo` with a `.get(key)` method
-  1. if `key` exists, return the associated value
-  2. if `key` does not exist, throw a `NoValue` error
-  3. note there is no other way to check if they key exists or not
-2. the consumer is forced to use `try/catch` e.g.
+We will attempt to show the problems with using `throw/catch` as an API,
+and to make the argument that one should _never_ force a consumer to use `try/catch`.
+
+Let us start with an example API that forces a user to use a `try/catch` block.
+
+1. Assume we have a collection object `foo` with a `.get(key)` method.
+  1. If `key` exists, return the associated value.
+  2. If `key` does not exist, throw a `NoValue` error.
+  3. note there is no other way to check if they key exists or not.
+2. The consumer is forced to use `try/catch` e.g.
 
   ```js
   try {
@@ -15,14 +20,12 @@ Outline
   }
   ```
 3. the problem, is that `foo.get` can have programmer errors in it, e.g.
-  1. the .get api could be called incorrectly (with not a string)
-  2. the .get implementation can have a mistyped variable
-  3. the .get implementation may have a dependency that throws an error
-4. these errors can creep in because semver allows dependencies to be upgraded on `npm install`
-5. if any of the above programmer erorrs occur, `foo.get()` will throw
-6. the program calling foo incorrectly assumes the collection has no value for the key passed in,
+  1. The `.get` method could be called incorrectly, e.g. `foo.get(null)`. If we only allow strings as keys, this is different from a `NoValue` error, but rather what should be an assertion error.
+  2. The `.get` implementation can have a mistyped variable and throw a `ReferenceError`. The consumers code will assume there is no value for the key, but in reality the API will never return a value.
+  3. The `.get` implementation may have a dependency that throws an error. This can occur if a dependency is upgraded transparently becaues of a semver bugfix.
+5. If any of the above programmer erorrs occur, `foo.get()` will throw an exception unrelated to `NoValue`.
+6. The program calling foo incorrectly assumes the collection has no value for the key passed in,
 when in reality the program is silently failing to behave correctly.
-The limit of the misbehavior is more or less unlimited.
 
 In many of the above events, foo.get() no longer operates correctly according to its own API.
 By catching all thrown errors however, we are masking the misbehavior.
@@ -30,53 +33,74 @@ By catching all thrown errors however, we are masking the misbehavior.
 Generally we want the program to terminate immediately, with as much error information available as possible,
 so we can correct the problem.
 
-One solution to the above is to switch on the type of error caugh in your catch statement.
-This works for errors we wish to handle, but can present problems if you do not wish to handle the error.
+# Current Solutions
 
-e.g.
+
+## Error Switching
+
+One solution to the above is to switch on the type of error caugh in your catch statement.
+This works for errors we wish to handle, but can present problems if you do not wish to handle the error. e.g.
 
 ```js
 try {
   let val = foo.get()
-} catch(e) {
-  if (e instanceof NoValue) {
+} catch(err) {
+  if (err instanceof NoValue) {
     // handle no value
   } else {
-    throw e
+    throw err
   }
 }
 ```
 
 The good
-1. e has captured the stack that threw the error
-Problems are
-1. it's ugly, and i bet you no body will do this
+1. Despite rethrowing, `err` still has the correct stack.
+The bad
+1. It's ugly, and i bet you no body will do this.
 2. We have unwound the actual stack from the error site to the error handling site.
 This prevents post-mortem analysis using core dumps and debugger tools.
   - lose all intermediate arguments used to reach the error condition
   - possibly lose values on the heap that were in play during the error
 
-Introduce typed error catching
+# Possible Modifications to JS
+
+## Introduce typed error catching
+
+We can integrate the idea of switching against returned errors directly into the language.
 
 1. Evaluate expression before catch block is entered to determine whether the error
    is best handled at this location.
+
 ```js
 try {
   let val = foo.get()
-} catch(e if <expr>) {
+} catch(e if e instanceof NoValue) {
   // e is the error we expect
 }
 ```
 
-The good:
- - the JS way
-The bad:
- - Need to unwind the stack to the catch handler location to evaluate <expr>
- - Unexpected side effects in <expr> can lead to scary program behavior
- - what if <expr> ::= (function() { throw 'hi'; })();
+or more generally
 
-A non-JS idiomatic way is to evaluate all catch conditions before entering the body
-of the try.
+```js
+try {
+  //
+} catch(e if <expr>) {
+  // ...
+} catch(e if <expr>) {
+  // ...
+}
+```
+
+The good:
+ - Follows "JS way" of using expressions.
+ - Allows multiple independent `catch` blocks for different error cases.
+The bad:
+ - Need to unwind the stack to the catch handler location to evaluate `<expr>`.
+ - Unexpected side effects in `<expr>` can lead to scary program behavior
+ - How do we handle complex cases like `<expr> ::= (function() { throw 'hi'; })();`
+
+We can eliminate the _bad_ in the above solutions by knowing the conditions of the catch blocks _before_ entering the try block.
+For example, allowing for typescript-style type annotation:
 
 ```js
 try {
@@ -86,18 +110,22 @@ try {
 }
 ```
 
+The good
+- all of the above
+- The VM can decide if the exception is catchable _before_ unwinding the stack.
+The bad
+- No language type support yet.
 Open Questions:
  - Is there a separate typing environment for looking up things on rhs of :
     - This is the case for typescript
- - Allow anything other than type literal (type name), maybe expression evaluating
-   to a type?
+ - Allow anything other than type literal (type name), maybe expression evaluating to a type?
 
-Other (existing?) solutions:
+## ES5/6 Compatible Solutions
 
- - pattern match on the return value (return null, undefined, or Error in exceptional
-   cases assuming that these are not valid entries in collection)
- - take a callback (function(err, result) {....})
-    - people would expect callback to invoke async even if result is sync (keep zalgo contained)
+- "pattern match" on the return value (return null, undefined, or Error in exceptional
+  cases assuming that these are not valid entries in collection)
+- take a callback (function(err, result) {....})
+  - people would expect callback to invoke async even if result is sync (keep zalgo contained)
 
 In order to minimize your program operating in an unknown state:
 
