@@ -27,14 +27,74 @@ Let us start with an example API that forces a user to use a `try/catch` block.
 6. The program calling foo incorrectly assumes the collection has no value for the key passed in,
 when in reality the program is silently failing to behave correctly.
 
-In many of the above events, foo.get() no longer operates correctly according to its own API.
+In many of the above events, `foo.get()` no longer operates correctly according to its own API.
 By catching all thrown errors however, we are masking the misbehavior.
 
 Generally we want the program to terminate immediately, with as much error information available as possible,
 so we can correct the problem.
 
-# Current Solutions
+# ES5/6 Compatible Solutions
 
+## "Pattern Matching"
+
+One can "pattern match" on the return value (return null, undefined, or Error in exceptional cases assuming that these are not valid entries in collection).
+
+```js
+var val = foo.get(...)
+if (val instanceof NoValue) {
+  // no value returned
+} else {
+  // we have a value!
+}
+```
+
+Note that this will let any thrown error terminate the program without unwinding the stack!
+
+## Callbacks / Errorbacks
+
+Even for a synchronous API, allow a callback that takes an `(error, value)` pair. e.g.
+
+```js
+foo.get(key, (err, val) => {
+  if (err) {
+    // no value
+  } else {
+    // value
+  }
+})
+```
+
+One should _probably_ invoke the callback asynchronously to avoid confusing.
+
+# What we learned
+
+In order to minimize your program operating in an unknown state:
+
+1. As part of your own APIs, do not force users to catch, throwing should always terminate the program.
+2. For legacy APIs like `JSON.parse` keep the try block to a minimum e.g.
+  ```js
+  var data
+  try {
+    data = JSON.parse(...)
+  } catch (e) {
+    data = null
+    // or ignore this
+  }
+  ```
+  - Perhaps node core can provide a safe wrapper for this, e.g. `util.parse` that throws if called with a non-string, but returns `null` or `undefined` when called with a non parsable string.
+3. DO throw if someone is using your API incorrectly, i.e. "This does not work and will never work"
+  Throwing should always result in a change to the code to prevent future errors from being thrown.
+
+## Uh oh, Promises catch everything
+
+Promise issues:
+ - promises impose implicit try-catch, result in catching everything as described above
+ - general fuckery
+ - capable of silently swallowing arbitrary errors
+ - This may be avoided using async/await since await converts failed promises to throws
+   which would play nicely if we have checked exceptions (see below)
+
+# Possible Modifications to JS
 
 ## Error Switching
 
@@ -62,9 +122,7 @@ This prevents post-mortem analysis using core dumps and debugger tools.
   - lose all intermediate arguments used to reach the error condition
   - possibly lose values on the heap that were in play during the error
 
-# Possible Modifications to JS
-
-## Introduce typed error catching
+## Introduce typed error catching / Checked Exceptions
 
 We can integrate the idea of switching against returned errors directly into the language.
 
@@ -120,40 +178,8 @@ Open Questions:
     - This is the case for typescript
  - Allow anything other than type literal (type name), maybe expression evaluating to a type?
 
-## ES5/6 Compatible Solutions
 
-- "pattern match" on the return value (return null, undefined, or Error in exceptional
-  cases assuming that these are not valid entries in collection)
-- take a callback (function(err, result) {....})
-  - people would expect callback to invoke async even if result is sync (keep zalgo contained)
-
-In order to minimize your program operating in an unknown state:
-
-1. as part of your own APIs, do not force users to catch, throwing should always terminate the program
-2. for legacy APIs like `JSON.parse` keep the try block to a minimum e.g.
-  ```js
-  var data
-  try {
-    data = JSON.parse(...)
-  } catch (e) {
-    data = null
-    // or ignore this
-  }
-  ```
-  - perhaps node core can provide a safe wrapper for this, e.g. `util.parse`
-3. DO throw if someone is using your API incorrectly, e.g. wrong argument types.
-  Throwing should always result in a change to the code to prevent future errors from being thrown
-    ex) using a null/instanceof check before invoking API with desired arguments
-
-Promise issues:
- - promises impose implicit try-catch, result in catching everything as described above
- - general fuckery
- - capable of silently swallowing arbitrary errors
- - This may be avoided using async/await since await converts failed promises to throws
-   which would play nicely with above checked exceptions
-
-
-# Don't know what throws
+# The story with `JSON.parse`
 
 Problem: Which native JS APIs throw?
 
