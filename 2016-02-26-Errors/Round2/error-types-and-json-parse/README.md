@@ -35,6 +35,35 @@ so we can correct the problem.
 
 # ES5/6 Compatible Solutions
 
+## Error Switching
+
+One solution to the above is to switch on the type of error caugh in your catch statement.
+This works for errors we wish to handle, but can present problems if you do not wish to handle the error. e.g.
+
+```js
+try {
+  let val = foo.get()
+} catch(err) {
+  if (err instanceof NoValue) {
+    // handle no value
+  } else {
+    throw err
+  }
+}
+```
+
+The good
+
+1. Despite rethrowing, `err` still has the correct stack.
+
+The bad
+
+1. It's ugly, and i bet you no body will do this.
+2. We have unwound the actual stack from the error site to the error handling site.
+This prevents post-mortem analysis using core dumps and debugger tools.
+  - lose all intermediate arguments used to reach the error condition
+  - possibly lose values on the heap that were in play during the error
+
 ## "Pattern Matching"
 
 One can "pattern match" on the return value (return null, undefined, or Error in exceptional cases assuming that these are not valid entries in collection).
@@ -94,35 +123,6 @@ Promise issues:
    which would play nicely if we have checked exceptions (see below)
 
 # Possible Modifications to JS
-
-## Error Switching
-
-One solution to the above is to switch on the type of error caugh in your catch statement.
-This works for errors we wish to handle, but can present problems if you do not wish to handle the error. e.g.
-
-```js
-try {
-  let val = foo.get()
-} catch(err) {
-  if (err instanceof NoValue) {
-    // handle no value
-  } else {
-    throw err
-  }
-}
-```
-
-The good
-
-1. Despite rethrowing, `err` still has the correct stack.
-
-The bad
-
-1. It's ugly, and i bet you no body will do this.
-2. We have unwound the actual stack from the error site to the error handling site.
-This prevents post-mortem analysis using core dumps and debugger tools.
-  - lose all intermediate arguments used to reach the error condition
-  - possibly lose values on the heap that were in play during the error
 
 ## Introduce typed error catching / Checked Exceptions
 
