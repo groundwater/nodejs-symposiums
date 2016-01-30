@@ -58,11 +58,11 @@ The good
 
 The bad
 
-1. It's ugly, and i bet you no body will do this.
+1. Easy to forget to setup the conditional in the catch block, and the additional `throw` is boilerplate.
 2. We have unwound the actual stack from the error site to the error handling site.
 This prevents post-mortem analysis using core dumps and debugger tools.
   - lose all intermediate arguments used to reach the error condition
-  - possibly lose values on the heap that were in play during the error
+  - possibly modified values on the heap that were in play during the error
 
 ## "Pattern Matching"
 
@@ -111,7 +111,7 @@ In order to minimize your program operating in an unknown state:
   }
   ```
   - Perhaps node core can provide a safe wrapper for this, e.g. `util.parse` that throws if called with a non-string, but returns `null` or `undefined` when called with a non parsable string.
-3. DO throw if someone is using your API incorrectly, i.e. "This does not work and will never work"
+3. One *may* throw if someone is using your API incorrectly, i.e. "This does not work and will never work"
   Throwing should always result in a change to the code to prevent future errors from being thrown.
 
 ## Uh oh, Promises catch everything
@@ -119,8 +119,12 @@ In order to minimize your program operating in an unknown state:
 Promise issues:
  - promises impose implicit try-catch, result in catching everything as described above
  - capable of silently swallowing arbitrary errors
- - This may be avoided using async/await since await converts failed promises to throws
-   which would play nicely if we have checked exceptions (see below)
+ - async/await turns rejected promises into throws
+ - if people use rejected promises for operational errors, we are forced to use catch blocks
+
+The implication here is that *any* rejected promise should terminate the program.
+On the server, this should crash the process and optionally produce a core dump.
+On the browser, at the very least developers should be able to use debugging tools to break at the site of the rejection.
 
 # Possible Modifications to JS
 
@@ -187,124 +191,4 @@ Open Questions:
  - Is there a separate typing environment for looking up things on rhs of :
     - This is the case for typescript
  - Allow anything other than type literal (type name), maybe expression evaluating to a type?
-
-
-# The story with `JSON.parse`
-
-Problem: Which native JS APIs throw?
-
-```js
-JSON.parse(input);
-```
-
-Problem: Which node core APIs throw?
-
-```js
-fs.readFileSync('foo.md');
-```
-
-# If something throws, we don't know if you can try/catch and recover
-
-Problem: we need better core documentation. Which ones are recoverable, which
-ones are not?
-
-Node core says: "if core throws, assume you are hosed. abort asap."
-
-# If throw is recoverable, try/catch is too blunt
-
-Problem: Lack of conditional catch means it's possible to catch unexpected
-errors in places where you only mean to catch expected errors. That means
-try/catch in JS is effectively equivalent to catch throwable.
-
-```js
-try {
-    var input1,
-        input2;
-
-    JSON.parse(input1);
-    JSON.pirse(input2);
-} catch (e) {
-    // e instanceof SyntaxError or TypeError, but what was the cause?
-}
-```
-
-Reduce the scope of try/catch to only the lines of code that you expect to
-throw.
-
-# Conditional catch won't always work
-
-Problem: Even if conditional catch based on error types is supported at a
-language level, JS is dynamic, no way to guarantee your condition is valid
-until the time you evaluate it.
-
-
-```js
-try {
-    x();
-    // but inside x(), we set global.Error = {};
-    // even if global.Error was not mutated, this error object can come from
-    // a different context, in which case this condition will also fail.
-} catch if (e instanceof Error) {
-    // evaluation of this condition happens only when this catch block
-    // is invoked. there is no guarantee that this will do what you expect it
-    // to do.
-}
-```
-
-An un-javascript like solution would be to resolve the exception types
-*before* the `try` block is entered.
-
-```
-try {
-  x() // throws FooError
-} catch(FooError as e) {
-  // only catch FooError (can be decided by VM w/o executing JS)
-}
-```
-
-# When using try/catch, you can catch things you don't want to catch
-
-Problem: When using third party libraries not owned by you that throws, you may
-unintentionally catch errors even the library author did not account for.
-
-```js
-try {
-    foo();
-} catch (e) {
-    // author documents TypeError, but what if throws ReferenceError?
-    // that's an unexpected scenario and you don't want to catch it.
-}
-```
-
-# JSON.parse
-
-So many bad things.
-
-# Between errbacks, throw/try/catch, event emitter, it's possible to swallow errors
-
-You can ignore/swallow error objects in errbacks.
-You can forget to subscribe to `.on('error', function() { ... })` event.
-You can forget to not rethrow.
-
-# Differentiating types of errors
-
-Programmer/Unexpected Errors:
-  - TypeError
-  - RangeError
-  - SyntaxError
-
-Operational/Expected Errors:
-  - Timeouts
-  - JSON.parse()
-  - ECONNREFUSED
-  - ENOENT
-  - ENOMEM
-  - etc.
-
-All programmer errors are automatically thrown, and operational errors are
-returned via errbacks. Not handling an operational error makes it a programmer
-error, however it is not automatically surfaced.
-
-JSON.parse is bad because it crosses both of these boxes.
-
 
