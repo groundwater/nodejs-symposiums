@@ -192,3 +192,6 @@ Open Questions:
     - This is the case for typescript
  - Allow anything other than type literal (type name), maybe expression evaluating to a type?
 
+## Cancellable Promises
+
+*WIP*
