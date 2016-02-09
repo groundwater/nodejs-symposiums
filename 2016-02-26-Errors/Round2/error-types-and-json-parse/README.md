@@ -192,6 +192,70 @@ Open Questions:
     - This is the case for typescript
  - Allow anything other than type literal (type name), maybe expression evaluating to a type?
 
+## Checked/Unchecked Errors
+
+> the following comes from a discussion between @groundwater and @chrisdickinson
+
+Introduce the concept of an *Unchecked* Error, where only *Checked* Errors are caught by Promises, and possibly try/catch blocks.
+
+### Use an Error hierarchy to indicate Checked/Unchecked
+
+We choose to borrow a few concepts from Java. Java has a very well thought out exception handling system, including the concept of *Checked* and *Unchecked* exceptions. In short, Checked exceptions must be handled, whereas Unchecked exceptions are generally not handled. Throwing an Unchecked exception generally indicates a programmer error, and the program will not work. In most cases, the program terminates and a post-mortem process can investigate why the error occurred.
+
+In JavaScript one could create a top-level name `UncheckedError` that when thrown bypasses the default `catch` clause. Libraries can use `UncheckedError`s to differentiate between operational errors, like a network socket closing, and programmer errors like calling a function with too few arguments.
+
+In adition, one could allow applications to choose whether `ReferenceError`, `TypeError`, and other built in errors inherit from `Error` or `UncheckedError`. Perhaps even by varrying this behavior between production and development. It would be our recommendation to always inherit builtin errors from `UncheckedError` but it's easy to allow both.
+
+e.g.
+
+```js
+// optionally Unchecked
+try {
+  console.log(someUndefinedVariable)
+} catch (e) {
+  // never called
+}
+
+// explicit
+try {
+  throw new UncheckedError('this will not be caught')
+} catch (e) {
+  // never called
+}
+```
+
+Pros
+
+1. allows developers to use `try/catch` without worrying about catching programmer errors
+2. minimal language changes
+3. developers can opt into strict or non-strict error behavior
+
+Cons
+
+1. may confuse developers who are unclear why `catch` isn't working
+2. developers may want to just catch everything, do we allow an explicit catch block for this?
+
+This could be forward compatible with a typed exceptions proposal, e.g. `catch(e: UncheckedError) {...}`
+
+### Use a new keyword instead of `throw`
+
+For example instead of `throw` we could introduce the `panic` keyword, which is not processed by exception handlers.
+
+```js
+panic new Error("something bad")
+```
+
+Pros
+
+1. does not introduce uncatchable exceptions
+2. explicit!
+
+Cons
+
+1. introduces top level non-reserved keyword, likely not backward compatible
+2. unclear if we should introduce a complimentary *recover*
+3. does not handle existing exceptions like `ReferenceError` unless a switch exists to turn these types of errors into panics
+
 ## Cancellable Promises
 
 *WIP*
