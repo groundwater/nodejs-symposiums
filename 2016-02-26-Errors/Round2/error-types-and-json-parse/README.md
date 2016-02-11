@@ -256,6 +256,67 @@ Cons
 2. unclear if we should introduce a complimentary *recover*
 3. does not handle existing exceptions like `ReferenceError` unless a switch exists to turn these types of errors into panics
 
+## The Recovery Method
+
+@zkat brought up another alternative for handling operational errors that seems compelling to me — specifying a condition/recovery object on async calls to "expect" and handle certain states. In practice, it might look something like this:
+
+```javascript
+const result = fs.readFilePromise('some/file', 'utf8', {
+  ENOENT() {
+    return null
+  },
+  EISDIR() {
+    return fs.readFilePromise('some/other/file', 'utf8')
+  }
+})
+```
+
+* The `recovery` object would be an optional terminal parameter that would enumerate expected operational errors.
+* A `handler` would map an error state (`EISDIR`) to a function.
+* The return value of the `handler` would be `Promise.resolve`'d, so a `handler` could perform asynchronous tasks in order to recover from an operation.
+* The resolution value of the `handler` would be used as the resolution value of the outer promise.
+  * If the `handler` for an operational error rejects or throws, that exception will be propagated to the outside promise.
+  * If the `recovery` object isn't present, or no `handler` is specified for an operational error, the returned promise will be rejected with that error.
+* The presence of a `handler` would be determined in a regular fashion across all Node APIs, looking up `recovery[err.code]`.
+* `handler`'s fire at the top of stack — so if one hit a truly exceptional situation in a `handler`, `process.abort()` should contain relevant information.
+
+Some examples:
+
+```javascript
+// recovery not present
+fs.readFilePromise('dne').catch(err => { /* ENOENT */ })
+
+// recovery present, no handler
+fs.readFilePromise('dne', {EISDIR() {}}).catch(err => { /* ENOENT */ })
+
+// recovery present, handler throws
+fs.readFilePromise('dne', {ENOENT() { throw new Error('oh no') }}).catch(err => { /* 'oh no' */ })
+
+// recovery present, handler rejects
+fs.readFilePromise('dne', {ENOENT() { return fs.readFilePromise('stilldne') }}).catch(err => { /* ENOENT */ })
+
+// recovery present, handler resolves
+fs.readFilePromise('dne', {ENOENT() { return fs.readFilePromise('exists!') }}).then(data => { /* yay! */ })
+
+// recovery present, immediate value
+fs.readFilePromise('dne', {ENOENT() { return null }}).then(data => { if (data) { /* yay! */ } })
+
+// using async/await, avoiding exceptional flow control:
+const data = await fs.readFilePromise(maybeDNE, {ENOENT() { return null }})
+if (data === null) {
+  return
+}
+
+// using async/await, preferring exceptional flow control:
+try {
+  const data = await fs.readFilePromise(maybeDNE)
+} catch (err) {
+  return
+}
+```
+
+@benjamingr [offers an alternative API](https://github.com/groundwater/nodejs-symposiums/pull/6#issuecomment-184120276) using a `.recover()` method attached to the Promise API.
+
 ## Cancellable Promises
 
 *WIP*
