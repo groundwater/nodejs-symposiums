@@ -16,15 +16,15 @@ Let us start with an example API that forces a user to use a `try/catch` block.
     var val = foo.get('mykey')
     // val exists and was part of the collection
   } catch(err) {
-    // programmer assumes there is no mykey/val pairning
+    // programmer assumes there is no mykey/val pairing
   }
   ```
 3. the problem, is that `foo.get` can have programmer errors in it, e.g.
   1. The `.get` method could be called incorrectly, e.g. `foo.get(null)`. If we only allow strings as keys, this is different from a `NoValue` error, but rather what should be an assertion error.
-  2. The `.get` implementation can have a mistyped variable and throw a `ReferenceError`. The consumers code will assume there is no value for the key, but in reality the API will never return a value.
+  2. The `.get` implementation can have a mistyped variable and throw a `ReferenceError`. The consumers' code will assume there is no value for the key, but in reality the API will never return a value.
   3. The `.get` implementation may have a dependency that throws an error. This can occur if a dependency is upgraded transparently becaues of a semver bugfix.
 5. If any of the above programmer erorrs occur, `foo.get()` will throw an exception unrelated to `NoValue`.
-6. The program calling foo incorrectly assumes the collection has no value for the key passed in,
+6. The program calling `foo` incorrectly assumes the collection has no value for the key passed in,
 when in reality the program is silently failing to behave correctly.
 
 In many of the above events, `foo.get()` no longer operates correctly according to its own API.
@@ -37,7 +37,7 @@ so we can correct the problem.
 
 ## Error Switching
 
-One solution to the above is to switch on the type of error caugh in your catch statement.
+One solution to the above is to switch on the type of error caught in your `catch` statement.
 This works for errors we wish to handle, but can present problems if you do not wish to handle the error. e.g.
 
 ```js
@@ -66,7 +66,7 @@ This prevents post-mortem analysis using core dumps and debugger tools.
 
 ## "Pattern Matching"
 
-One can "pattern match" on the return value (return null, undefined, or Error in exceptional cases assuming that these are not valid entries in collection).
+One can "pattern match" on the return value (return `null`, `undefined`, or `Error` in exceptional cases assuming that these are not valid entries in collection).
 
 ```js
 var val = foo.get(...)
@@ -204,7 +204,7 @@ We choose to borrow a few concepts from Java. Java has a very well thought out e
 
 In JavaScript one could create a top-level name `UncheckedError` that when thrown bypasses the default `catch` clause. Libraries can use `UncheckedError`s to differentiate between operational errors, like a network socket closing, and programmer errors like calling a function with too few arguments.
 
-In adition, one could allow applications to choose whether `ReferenceError`, `TypeError`, and other built in errors inherit from `Error` or `UncheckedError`. Perhaps even by varrying this behavior between production and development. It would be our recommendation to always inherit builtin errors from `UncheckedError` but it's easy to allow both.
+In addition, one could allow applications to choose whether `ReferenceError`, `TypeError`, and other built in errors inherit from `Error` or `UncheckedError`. Perhaps even by varying this behavior between production and development. It would be our recommendation to always inherit builtin errors from `UncheckedError` but it's easy to allow both.
 
 e.g.
 
