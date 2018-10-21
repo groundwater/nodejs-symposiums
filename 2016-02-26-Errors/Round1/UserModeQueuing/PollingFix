@@ -1,0 +1,17 @@
+The described **possible solution** will break the conditions of the other contexts if there will be more than one context.
+
+Much better way is to try to fix the behaviour of that task scheduler with the JS core itself.
+
+Nowdays, after three years we have almost good working hooks implementation: https://nodejs.org/api/async_hooks.html
+
+But the core problem is not the tracking of Asynchronous context.
+
+The issue we are looking for is about the scope split.
+
+Please look bit in deep.
+When you are adding the work -- the function that will be executed in the task scheduler
+-- you will create the context of that function too. 
+
+So, if there will be the way to somehow notify userlad about the new context creation, it will solve the issue in general.
+If that sort of notification will be done via async_hooks, it will create a model, when there is not necessary 
+to make any changes in the libraries, which works through this behaviour.
