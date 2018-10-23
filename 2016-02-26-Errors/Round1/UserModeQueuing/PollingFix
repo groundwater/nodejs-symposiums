@@ -15,3 +15,6 @@ When you are adding the work -- the function that will be executed in the task s
 So, if there will be the way to somehow notify userlad about the new context creation, it will solve the issue in general.
 If that sort of notification will be done via async_hooks, it will create a model, when there is not necessary 
 to make any changes in the libraries, which works through this behaviour.
+
+
+So, the description is here: https://github.com/nodejs/diagnostics/issues/249
